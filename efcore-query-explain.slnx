@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/efcore-query-explain/">
+    <Project Path="src/efcore-query-explain/EfCore.QueryExplain.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/efcore-query-explain.Tests/">
+    <Project Path="tests/efcore-query-explain.Tests/EfCore.QueryExplain.Tests.csproj" />
+  </Folder>
+</Solution>
