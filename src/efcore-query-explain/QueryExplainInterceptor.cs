@@ -217,7 +217,49 @@ public sealed class QueryExplainInterceptor : DbCommandInterceptor
             _ => LogLevel.Information,
         };
 
-        _logger.Log(level, "[{Kind}] {Message} :: {CommandText}", finding.Kind, finding.Message, finding.CommandText);
-        FindingReported?.Invoke(this, finding);
+        if (_logger.IsEnabled(level))
+        {
+            var eventId = finding.Kind switch
+            {
+                FindingKind.MissingIndex => LogEvents.MissingIndex,
+                FindingKind.NPlusOne => LogEvents.NPlusOne,
+                FindingKind.UnusedIndex => LogEvents.UnusedIndex,
+                _ => LogEvents.Other,
+            };
+
+            if (finding.SuggestedSql is null)
+            {
+                _logger.Log(
+                    level,
+                    eventId,
+                    "{Kind}: {Message}{NewLine}{CommandText}",
+                    finding.Kind,
+                    finding.Message,
+                    Environment.NewLine,
+                    finding.CommandText);
+            }
+            else
+            {
+                _logger.Log(
+                    level,
+                    eventId,
+                    "{Kind}: {Message}{NewLine}Suggested: {SuggestedSql}{NewLine}{CommandText}",
+                    finding.Kind,
+                    finding.Message,
+                    Environment.NewLine,
+                    finding.SuggestedSql,
+                    Environment.NewLine,
+                    finding.CommandText);
+            }
+        }
+
+        try
+        {
+            FindingReported?.Invoke(this, finding);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "FindingReported subscriber threw for {Kind}", finding.Kind);
+        }
     }
 }
