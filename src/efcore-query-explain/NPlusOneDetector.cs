@@ -16,6 +16,13 @@ public sealed class NPlusOneDetector : INPlusOneDetector
     /// <inheritdoc />
     public QueryFinding? Record(Guid contextId, string commandText, QueryExplainOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandText);
+        if (contextId == Guid.Empty)
+        {
+            throw new ArgumentException("contextId must not be empty", nameof(contextId));
+        }
+
         if (!options.DetectNPlusOne)
         {
             return null;

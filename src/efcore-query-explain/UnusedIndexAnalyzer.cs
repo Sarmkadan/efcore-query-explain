@@ -41,6 +41,9 @@ public sealed class UnusedIndexAnalyzer : IQueryAnalyzer
     /// <inheritdoc />
     public IReadOnlyList<QueryFinding> Analyze(QueryPlan plan, QueryExplainOptions options)
     {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(options);
+
         if (!options.SuggestIndexes)
         {
             return [];
