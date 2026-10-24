@@ -45,8 +45,7 @@ public sealed class SqlServerPlanProvider : IQueryPlanProvider
                     return null;
                 }
 
-                // TODO: parse the ShowPlan XML once SqlServerPlanParser exists; until then the plan is kept raw.
-                IReadOnlyList<PlanNode> nodes = [];
+                var nodes = SqlServerPlanParser.Parse(raw);
 
                 return new QueryPlan(command.CommandText, "SqlServer", raw, nodes, DateTimeOffset.UtcNow);
             }
