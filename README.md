@@ -50,6 +50,80 @@ dotnet add package EfCore.QueryExplain
 
 Requires .NET 8 and EF Core 8.
 
+## Configuration
+
+`QueryExplainOptions` controls what the interceptor captures and reports. Every property has a default, so the interceptor works without configuration.
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `CapturePlans` | `bool` | `true` | Captures the EXPLAIN plan of every executed reader command. When `false`, no plans are captured and the plan-based analyzers report nothing. |
+| `SuggestIndexes` | `bool` | `true` | Enables the missing-index and unused-index analyzers. Plans are still captured when `false`. |
+| `DetectNPlusOne` | `bool` | `true` | Enables N+1 detection: the same query shape with different parameters inside one `DbContext` scope. |
+| `NPlusOneThreshold` | `int` | `5` | Number of structurally identical queries in one `DbContext` scope after which an N+1 finding is raised. Must be at least `2`. |
+| `ScanRowThreshold` | `long` | `1000` | Estimated row count above which a sequential or full scan is reported as a missing-index candidate. Must not be negative. Has no effect on SQLite, which reports no estimates. |
+| `ExplainTimeout` | `TimeSpan` | `00:00:02` | Maximum time spent running EXPLAIN for one query. Must be greater than zero; values above 60 seconds fail validation. |
+| `Enabled` | `bool` | `true` | Master switch. When `false`, every command passes through untouched. |
+
+### appsettings.json
+
+Bind the options from the `QueryExplain` section:
+
+```json
+{
+  "QueryExplain": {
+    "Enabled": true,
+    "CapturePlans": true,
+    "SuggestIndexes": true,
+    "DetectNPlusOne": true,
+    "NPlusOneThreshold": 5,
+    "ScanRowThreshold": 1000,
+    "ExplainTimeout": "00:00:02"
+  }
+}
+```
+
+Keep `Enabled` off outside development, for example by setting it to `false` in `appsettings.json` and `true` in `appsettings.Development.json`.
+
+### Dependency injection
+
+`AddQueryExplain` binds the options, registers the default providers and analyzers, and registers `QueryExplainInterceptor` as a singleton. Pass a configuration section, or an `Action<QueryExplainOptions>` to configure in code.
+
+```csharp
+using EfCore.QueryExplain;
+
+builder.Services.AddQueryExplain(builder.Configuration.GetSection("QueryExplain"));
+
+builder.Services.AddDbContext<AppDbContext>((sp, o) => o
+    .UseNpgsql(connectionString)
+    .UseQueryExplain(sp.GetRequiredService<QueryExplainInterceptor>()));
+```
+
+### Without dependency injection
+
+`UseQueryExplain` also accepts a configuration lambda. It builds the interceptor from the defaults and the values set in the lambda:
+
+```csharp
+builder.Services.AddDbContext<AppDbContext>(o => o
+    .UseNpgsql(connectionString)
+    .UseQueryExplain(x =>
+    {
+        x.Enabled = builder.Environment.IsDevelopment();
+        x.ExplainTimeout = TimeSpan.FromSeconds(5);
+    }));
+```
+
+## Supported providers
+
+The provider is matched by the EF Core provider name (`DbContext.Database.ProviderName`). Only commands starting with `SELECT` are explained.
+
+| Provider invariant name | EXPLAIN mechanism | Rows | Cost | Index |
+| --- | --- | --- | --- | --- |
+| `Npgsql.EntityFrameworkCore.PostgreSQL` | `EXPLAIN (FORMAT JSON)` | Yes (`Plan Rows`) | Yes (`Total Cost`) | Yes (`Index Name`) |
+| `Microsoft.EntityFrameworkCore.SqlServer` | `SET SHOWPLAN_XML ON` | Yes (`EstimateRows`) | Yes (`EstimatedTotalSubtreeCost`) | Yes (`Index` on the object) |
+| `Microsoft.EntityFrameworkCore.Sqlite` | `EXPLAIN QUERY PLAN` | No | No | Yes, when the plan names one (`USING INDEX`, `PRIMARY KEY`) |
+
+Row and cost thresholds apply only to providers that report those fields, so `ScanRowThreshold` does not affect SQLite.
+
 ## API overview
 
 | Type | Role |
