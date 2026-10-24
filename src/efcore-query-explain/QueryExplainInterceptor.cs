@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 
@@ -73,13 +74,77 @@ public sealed class QueryExplainInterceptor : DbCommandInterceptor
     /// <param name="eventData">EF Core event data, used to resolve the provider and context id.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>The findings for this command, possibly empty.</returns>
-    public Task<IReadOnlyList<QueryFinding>> AnalyzeCommandAsync(
+    public async Task<IReadOnlyList<QueryFinding>> AnalyzeCommandAsync(
         DbCommand command,
         CommandEventData eventData,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        if (!_options.Enabled)
+        {
+            return Array.Empty<QueryFinding>();
+        }
+
+        var findings = new List<QueryFinding>();
+        var providerName = eventData.Context?.Database.ProviderName;
+
+        if (_options.DetectNPlusOne && eventData.Context != null)
+        {
+            var nPlusOne = _nPlusOneDetector.Record(eventData.Context.ContextId.InstanceId, command.CommandText, _options);
+            if (nPlusOne != null)
+            {
+                findings.Add(nPlusOne);
+            }
+        }
+
+        if (_options.CapturePlans && providerName != null && IsExplainable(command.CommandText))
+        {
+            var planProvider = _planProviders.FirstOrDefault(p =>
+                string.Equals(p.ProviderName, providerName, StringComparison.OrdinalIgnoreCase));
+
+            if (planProvider != null)
+            {
+                using var explainCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                explainCts.CancelAfter(_options.ExplainTimeout);
+
+                QueryPlan? plan = null;
+                try
+                {
+                    plan = await planProvider.ExplainAsync(command, explainCts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogDebug("EXPLAIN timed out after {Timeout}", _options.ExplainTimeout);
+                }
+                catch (DbException ex)
+                {
+                    _logger.LogDebug(ex, "EXPLAIN failed for provider {Provider}", providerName);
+                }
+
+                if (plan != null)
+                {
+                    foreach (var analyzer in _analyzers)
+                    {
+                        findings.AddRange(analyzer.Analyze(plan, _options));
+                    }
+                }
+            }
+        }
+
+        foreach (var finding in findings)
+        {
+            Report(finding);
+        }
+
+        return findings;
     }
+
+    /// <summary>
+    /// Returns <c>true</c> for SELECT statements; EXPLAIN itself and other commands are not captured,
+    /// which also keeps the interceptor from recursing into its own EXPLAIN commands.
+    /// </summary>
+    /// <param name="commandText">The SQL text of the command.</param>
+    private static bool IsExplainable(string commandText) =>
+        commandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Logs <paramref name="finding"/> and raises <see cref="FindingReported"/>.
@@ -87,7 +152,14 @@ public sealed class QueryExplainInterceptor : DbCommandInterceptor
     /// <param name="finding">The finding to publish.</param>
     private void Report(QueryFinding finding)
     {
+        var level = finding.Severity switch
+        {
+            FindingSeverity.Error => LogLevel.Error,
+            FindingSeverity.Warning => LogLevel.Warning,
+            _ => LogLevel.Information,
+        };
+
+        _logger.Log(level, "[{Kind}] {Message} :: {CommandText}", finding.Kind, finding.Message, finding.CommandText);
         FindingReported?.Invoke(this, finding);
-        throw new NotImplementedException();
     }
 }
