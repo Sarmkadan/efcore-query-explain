@@ -50,8 +50,7 @@ public sealed class SqlitePlanProvider : IQueryPlanProvider
 
             var raw = string.Join('\n', lines);
 
-            // TODO: parse rows into PlanNode tree once SqlitePlanParser exists.
-            return new QueryPlan(command.CommandText, "Sqlite", raw, [], DateTimeOffset.UtcNow);
+            return new QueryPlan(command.CommandText, "Sqlite", raw, SqlitePlanParser.Parse(raw), DateTimeOffset.UtcNow);
         }
         finally
         {
