@@ -6,15 +6,6 @@ namespace EfCore.QueryExplain;
 /// </summary>
 public sealed class SequentialScanAnalyzer : IQueryAnalyzer
 {
-    private static readonly HashSet<string> ScanOperations = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Seq Scan",
-        "Table Scan",
-        "Clustered Index Scan",
-        "SCAN TABLE",
-        "SCAN",
-    };
-
     /// <inheritdoc />
     public IReadOnlyList<QueryFinding> Analyze(QueryPlan plan, QueryExplainOptions options)
     {
@@ -25,10 +16,9 @@ public sealed class SequentialScanAnalyzer : IQueryAnalyzer
 
         var findings = new List<QueryFinding>();
 
-        foreach (var node in Flatten(plan.Nodes))
+        foreach (var node in plan.Scans())
         {
-            if (!ScanOperations.Contains(node.Operation) ||
-                node.Table is null ||
+            if (node.Table is null ||
                 node.EstimatedRows is not { } rows ||
                 rows < options.ScanRowThreshold)
             {
@@ -52,18 +42,5 @@ public sealed class SequentialScanAnalyzer : IQueryAnalyzer
         }
 
         return findings;
-    }
-
-    private static IEnumerable<PlanNode> Flatten(IEnumerable<PlanNode> nodes)
-    {
-        foreach (var node in nodes)
-        {
-            yield return node;
-
-            foreach (var child in Flatten(node.Children))
-            {
-                yield return child;
-            }
-        }
     }
 }

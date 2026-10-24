@@ -47,7 +47,7 @@ public sealed class UnusedIndexAnalyzer : IQueryAnalyzer
         }
 
         var where = WhereClause.Match(plan.CommandText);
-        if (!where.Success || !HasUnindexedScan(plan.Nodes))
+        if (!where.Success || !plan.Scans().Any(node => node.Index is null))
         {
             return [];
         }
@@ -76,9 +76,4 @@ public sealed class UnusedIndexAnalyzer : IQueryAnalyzer
 
         return findings;
     }
-
-    private static bool HasUnindexedScan(IEnumerable<PlanNode> nodes) =>
-        nodes.Any(node =>
-            (node.Index is null && node.Operation.Contains("Scan", StringComparison.OrdinalIgnoreCase)) ||
-            HasUnindexedScan(node.Children));
 }
