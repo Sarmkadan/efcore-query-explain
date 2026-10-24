@@ -15,6 +15,11 @@ namespace EfCore.QueryExplain;
 /// </remarks>
 public sealed class QueryExplainInterceptor : DbCommandInterceptor
 {
+    private static readonly string[] NonAnalyzedPrefixes =
+    {
+        "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP",
+    };
+
     private readonly QueryExplainOptions _options;
     private readonly IReadOnlyList<IQueryPlanProvider> _planProviders;
     private readonly IReadOnlyList<IQueryAnalyzer> _analyzers;
@@ -48,23 +53,59 @@ public sealed class QueryExplainInterceptor : DbCommandInterceptor
     /// </summary>
     public event EventHandler<QueryFinding>? FindingReported;
 
+    /// <summary>
+    /// Synchronous entry point for reader commands. Blocks the calling thread until analysis completes.
+    /// </summary>
+    /// <remarks>
+    /// The sync path blocks on <see cref="AnalyzeCommandAsync"/> via <c>GetAwaiter().GetResult()</c>.
+    /// Prefer the async execution path in applications that use async EF Core APIs, as it does not block.
+    /// Failures are logged and never propagated to the application.
+    /// </remarks>
     /// <inheritdoc />
     public override InterceptionResult<DbDataReader> ReaderExecuting(
         DbCommand command,
         CommandEventData eventData,
         InterceptionResult<DbDataReader> result)
     {
-        throw new NotImplementedException();
+        if (!_options.Enabled || result.HasResult || !ShouldAnalyze(command))
+        {
+            return result;
+        }
+
+        try
+        {
+            AnalyzeCommandAsync(command, eventData).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Query analysis failed");
+        }
+
+        return result;
     }
 
     /// <inheritdoc />
-    public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+    public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
         DbCommand command,
         CommandEventData eventData,
         InterceptionResult<DbDataReader> result,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        if (!_options.Enabled || result.HasResult || !ShouldAnalyze(command))
+        {
+            return result;
+        }
+
+        try
+        {
+            await AnalyzeCommandAsync(command, eventData, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Query analysis failed");
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -145,6 +186,23 @@ public sealed class QueryExplainInterceptor : DbCommandInterceptor
     /// <param name="commandText">The SQL text of the command.</param>
     private static bool IsExplainable(string commandText) =>
         commandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Returns <c>false</c> for commands without SQL text and for data-modifying or DDL statements,
+    /// which are never analyzed.
+    /// </summary>
+    /// <param name="command">The command about to execute.</param>
+    private static bool ShouldAnalyze(DbCommand command)
+    {
+        var commandText = command.CommandText;
+        if (string.IsNullOrWhiteSpace(commandText))
+        {
+            return false;
+        }
+
+        var trimmed = commandText.TrimStart();
+        return !NonAnalyzedPrefixes.Any(prefix => trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>
     /// Logs <paramref name="finding"/> and raises <see cref="FindingReported"/>.
