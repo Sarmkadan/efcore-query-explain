@@ -41,8 +41,7 @@ public sealed class SequentialScanAnalyzer : IQueryAnalyzer
 
             var message = $"{node.Operation} on \"{node.Table}\" (est. {rows} rows)";
 
-            // TODO: replace with IndexSuggestionBuilder.Build(plan.CommandText, node.Table) once that builder exists.
-            string? suggestedSql = null;
+            var suggestedSql = IndexSuggestionBuilder.Build(plan.CommandText, node.Table, plan.Provider);
 
             findings.Add(new QueryFinding(
                 FindingKind.MissingIndex,
