@@ -54,8 +54,7 @@ public sealed class PostgresPlanProvider : IQueryPlanProvider
                 return null;
             }
 
-            // TODO: parse `raw` into the PlanNode tree once PostgresPlanParser exists (separate task).
-            IReadOnlyList<PlanNode> nodes = Array.Empty<PlanNode>();
+            var nodes = PostgresPlanParser.Parse(raw);
 
             return new QueryPlan(command.CommandText, "Npgsql", raw, nodes, DateTimeOffset.UtcNow);
         }
