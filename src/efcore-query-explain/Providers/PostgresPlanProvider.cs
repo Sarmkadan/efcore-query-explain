@@ -33,20 +33,7 @@ public sealed class PostgresPlanProvider : IQueryPlanProvider
 
         try
         {
-            await using var explain = connection.CreateCommand();
-            explain.Transaction = command.Transaction;
-            explain.CommandText = "EXPLAIN (FORMAT JSON) " + command.CommandText;
-
-            foreach (DbParameter source in command.Parameters)
-            {
-                var copy = explain.CreateParameter();
-                copy.ParameterName = source.ParameterName;
-                copy.Value = source.Value;
-                copy.DbType = source.DbType;
-                copy.Direction = source.Direction;
-                copy.Size = source.Size;
-                explain.Parameters.Add(copy);
-            }
+            await using var explain = CommandCloner.CloneWithText(command, "EXPLAIN (FORMAT JSON) " + command.CommandText);
 
             var raw = (await explain.ExecuteScalarAsync(cancellationToken))?.ToString();
             if (raw is null)
