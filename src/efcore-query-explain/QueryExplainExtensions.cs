@@ -32,6 +32,7 @@ public static class QueryExplainExtensions
 
         var options = new QueryExplainOptions();
         configure?.Invoke(options);
+        options.Validate();
 
         var interceptor = new QueryExplainInterceptor(
             options,
