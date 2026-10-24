@@ -17,6 +17,8 @@ public static class PostgresPlanParser
     /// </returns>
     public static IReadOnlyList<PlanNode> Parse(string explainJson)
     {
+        ArgumentNullException.ThrowIfNull(explainJson);
+
         try
         {
             using var document = JsonDocument.Parse(explainJson);

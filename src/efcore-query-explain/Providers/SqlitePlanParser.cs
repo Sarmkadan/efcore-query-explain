@@ -33,6 +33,8 @@ public static class SqlitePlanParser
     /// <returns>The root nodes of the plan, or an empty list when no row could be parsed.</returns>
     public static IReadOnlyList<PlanNode> Parse(string rawPlan)
     {
+        ArgumentNullException.ThrowIfNull(rawPlan);
+
         var rows = new List<(long Id, long Parent, string Detail)>();
         foreach (var line in rawPlan.Split('\n'))
         {

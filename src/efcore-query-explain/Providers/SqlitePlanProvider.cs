@@ -17,6 +17,10 @@ public sealed class SqlitePlanProvider : IQueryPlanProvider
     /// <inheritdoc />
     public async Task<QueryPlan?> ExplainAsync(DbCommand command, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var connection = command.Connection ?? throw new InvalidOperationException("Command has no connection");
+
         var sql = command.CommandText.Trim();
         if (!sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) &&
             !sql.StartsWith("WITH", StringComparison.OrdinalIgnoreCase))
@@ -24,7 +28,6 @@ public sealed class SqlitePlanProvider : IQueryPlanProvider
             return null;
         }
 
-        var connection = command.Connection!;
         var openedHere = connection.State != ConnectionState.Open;
         if (openedHere)
         {

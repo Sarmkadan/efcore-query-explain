@@ -21,6 +21,8 @@ public static class SqlServerPlanParser
     /// </returns>
     public static IReadOnlyList<PlanNode> Parse(string showplanXml)
     {
+        ArgumentNullException.ThrowIfNull(showplanXml);
+
         try
         {
             var document = XDocument.Parse(showplanXml);

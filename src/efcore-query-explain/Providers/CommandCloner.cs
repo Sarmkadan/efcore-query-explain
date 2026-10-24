@@ -15,6 +15,9 @@ internal static class CommandCloner
     /// <returns>A new command the caller must dispose.</returns>
     internal static DbCommand CloneWithText(DbCommand source, string newText)
     {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newText);
+
         var clone = source.Connection!.CreateCommand();
         clone.Transaction = source.Transaction;
         clone.CommandText = newText;
