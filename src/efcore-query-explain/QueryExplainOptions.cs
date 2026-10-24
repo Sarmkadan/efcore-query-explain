@@ -6,6 +6,11 @@ namespace EfCore.QueryExplain;
 public sealed class QueryExplainOptions
 {
     /// <summary>
+    /// The configuration section name used when binding these options from appsettings or environment config.
+    /// </summary>
+    public const string SectionName = "QueryExplain";
+
+    /// <summary>
     /// Gets or sets whether EXPLAIN plans are captured for every executed reader command.
     /// Defaults to <c>true</c>.
     /// </summary>
@@ -48,4 +53,14 @@ public sealed class QueryExplainOptions
     /// Defaults to <c>true</c>.
     /// </summary>
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Creates a copy of these options with the same values. Changing the copy does not affect the original.
+    /// </summary>
+    /// <returns>A new <see cref="QueryExplainOptions"/> holding the same values.</returns>
+    public QueryExplainOptions Clone()
+    {
+        // All properties are value types, so a shallow member-wise copy is a full copy.
+        return (QueryExplainOptions)MemberwiseClone();
+    }
 }
